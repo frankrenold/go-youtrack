@@ -8,89 +8,11 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"regexp"
-	"strconv"
 
+	"github.com/frankrenold/go-youtrack/simplified"
+	"github.com/frankrenold/go-youtrack/youtrack"
 	"github.com/joho/godotenv"
 )
-
-type Issue struct {
-	IDReadable   string        `json:"idReadable"`
-	Updated      int64         `json:"updated"`
-	Summary      string        `json:"summary"`
-	Created      int64         `json:"created"`
-	CustomFields []CustomField `json:"customFields"`
-	Description  string        `json:"description"`
-	Type         string        `json:"$type"`
-}
-
-type CustomField struct {
-	Values Value  `json:"value"`
-	Name   string `json:"name"`
-	Type   string `json:"$type"`
-}
-
-type Value struct {
-	Text   string  `json:"text"`
-	Name   string  `json:"name"`
-	Type   string  `json:"$type"`
-	Number float64 `json:"number"`
-	Multi  []Value `json:"multi"`
-}
-
-func (v *Value) UnmarshalJSON(data []byte) error {
-	// fmt.Printf("\n%v\n", string(data))
-
-	switch data[0] {
-	case '{': // one object -> normal unmarshal
-		re := regexp.MustCompile(`"text":"([^"\\]*(?:\\.[^"\\]*)*)"`)
-		matches := re.FindSubmatch(data)
-		if len(matches) > 1 {
-			// fmt.Printf("FOUND: %s\n", matches[1])
-			v.Text = fmt.Sprintf("%s", matches[1])
-		}
-
-		re = regexp.MustCompile(`"name":"([^"\\]*(?:\\.[^"\\]*)*)"`)
-		matches = re.FindSubmatch(data)
-		if len(matches) > 1 {
-			// fmt.Printf("FOUND: %s\n", matches[1])
-			v.Name = fmt.Sprintf("%s", matches[1])
-		}
-
-		re = regexp.MustCompile(`"\$type":"([^"\\]*(?:\\.[^"\\]*)*)"`)
-		matches = re.FindSubmatch(data)
-		if len(matches) > 1 {
-			// fmt.Printf("FOUND: %s\n", matches[1])
-			v.Type = fmt.Sprintf("%s", matches[1])
-		}
-	case '[': // multiple values -> ignore
-		// fmt.Printf("MULTI: %s\n", data)
-		v.Multi = []Value{}
-		re := regexp.MustCompile(`\{.*?\}`)
-		matches := re.FindAll(data, -1)
-		for _, match := range matches {
-			// for i, match := range matches {
-			// fmt.Printf("FOUND %d: %s\n", i, match)
-			var multiVal Value
-			err := json.Unmarshal(match, &multiVal)
-			if err != nil {
-				return err
-			}
-			v.Multi = append(v.Multi, multiVal)
-		}
-	default: // try raw number
-		strData := string(data)
-		if strData != "null" {
-			number, err := strconv.ParseFloat(strData, 64)
-			if err != nil {
-				return err
-			}
-			v.Number = number
-		}
-	}
-	fmt.Printf("%+v\n", *v)
-	return nil
-}
 
 func main() {
 	// Load .env
@@ -120,7 +42,7 @@ func main() {
 	}
 	defer resp.Body.Close()
 	// Read the response body into expected struct
-	var issues []Issue
+	var issues []youtrack.Issue
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		fmt.Println("Error reading response:", err)
@@ -133,21 +55,16 @@ func main() {
 		return
 	}
 
-	// Remove any urls and email addresses
-
-}
-
-// removeURLsAndEmails entfernt URLs und E-Mail-Adressen aus dem gegebenen Text
-func removeURLsAndEmails(text string) string {
-	// Regex für URLs
-	urlRegex := regexp.MustCompile(`https?://[^\s]+`)
-	// Regex für E-Mail-Adressen
-	emailRegex := regexp.MustCompile(`[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}`)
-
-	// URLs entfernen
-	text = urlRegex.ReplaceAllString(text, "")
-	// E-Mail-Adressen entfernen
-	text = emailRegex.ReplaceAllString(text, "")
-
-	return text
+	// simplify
+	var simpleIssues []simplified.Issue
+	for _, issue := range issues {
+		si := simplified.NewIssue(issue)
+		simpleIssues = append(simpleIssues, *si)
+	}
+	simplJson, err := json.Marshal(simpleIssues)
+	if err != nil {
+		fmt.Println("Error converting simple issues to json:", err)
+		return
+	}
+	os.WriteFile("issues.json", simplJson, 0644)
 }
