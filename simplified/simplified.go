@@ -45,11 +45,15 @@ func removeURLsAndEmails(text string) string {
 	urlRegex := regexp.MustCompile(`https?://[^\s]+`)
 	// Regex für E-Mail-Adressen
 	emailRegex := regexp.MustCompile(`[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}`)
+	// Regex für Mentions
+	mentionRegex := regexp.MustCompile(`@[^\s]+`)
 
 	// URLs entfernen
 	text = urlRegex.ReplaceAllString(text, "")
 	// E-Mail-Adressen entfernen
 	text = emailRegex.ReplaceAllString(text, "")
+	// Mentions entfernen
+	text = mentionRegex.ReplaceAllString(text, "")
 
 	return text
 }
