@@ -2,14 +2,16 @@ package simplified
 
 import (
 	"regexp"
+	"time"
 
 	"github.com/frankrenold/go-youtrack/youtrack"
 )
 
 type Issue struct {
 	Id                 string   `json:"id"`
-	Created            int64    `json:"created"`
-	Updated            int64    `json:"updated"`
+	Created            string   `json:"created"`
+	Updated            string   `json:"updated"`
+	Outdated           bool     `json:"outdated"`
 	Type               string   `json:"type"`
 	Priority           string   `json:"priority"`
 	Summary            string   `json:"summary"`
@@ -22,10 +24,15 @@ type Issue struct {
 }
 
 func NewIssue(yt youtrack.Issue) *Issue {
+	cTime := time.Unix(0, yt.Created*int64(time.Millisecond))
+	uTime := time.Unix(0, yt.Updated*int64(time.Millisecond))
+	today := time.Now()
+	outdatedfrom := uTime.Add(6 * 30 * 24 * time.Hour)
 	i := Issue{
 		Id:                 yt.IDReadable,
-		Created:            yt.Created,
-		Updated:            yt.Updated,
+		Created:            cTime.Format("2006-01-02 15:04:05"),
+		Updated:            uTime.Format("2006-01-02 15:04:05"),
+		Outdated:           outdatedfrom.Before(today),
 		Type:               yt.Type,
 		Priority:           yt.GetStringByCustomfieldName("Priority"),
 		Summary:            removeURLsAndEmails(yt.Summary),
